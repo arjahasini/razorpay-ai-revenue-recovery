@@ -2,9 +2,13 @@ import os
 from datetime import datetime, timedelta, timezone
 
 import jwt
-from jwt import PyJWTError
 from passlib.context import CryptContext
 
+
+# JWT configuration
+SECRET_KEY = os.getenv("JWT_SECRET_KEY", "change-this-secret-key")
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
 # Password hashing
 pwd_context = CryptContext(
@@ -13,20 +17,14 @@ pwd_context = CryptContext(
 )
 
 
-# JWT configuration
-SECRET_KEY = os.getenv("JWT_SECRET_KEY", "razorpay-ai-revenue-recovery-secret-key")
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60
-
-
 def hash_password(password: str) -> str:
     """Hash a plain-text password."""
     return pwd_context.hash(password)
 
 
-def verify_password(password: str, hashed_password: str) -> bool:
+def verify_password(password: str, password_hash: str) -> bool:
     """Verify a plain-text password against its hash."""
-    return pwd_context.verify(password, hashed_password)
+    return pwd_context.verify(password, password_hash)
 
 
 def create_access_token(
@@ -36,13 +34,10 @@ def create_access_token(
     """Create a JWT access token."""
     to_encode = data.copy()
 
-    if expires_delta:
-        expire = datetime.now(timezone.utc) + expires_delta
-    else:
-        expire = datetime.now(timezone.utc) + timedelta(
-            minutes=ACCESS_TOKEN_EXPIRE_MINUTES
-        )
+    if expires_delta is None:
+        expires_delta = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
 
+    expire = datetime.now(timezone.utc) + expires_delta
     to_encode.update({"exp": expire})
 
     return jwt.encode(
@@ -52,14 +47,10 @@ def create_access_token(
     )
 
 
-def decode_access_token(token: str) -> dict | None:
+def decode_access_token(token: str) -> dict:
     """Decode and validate a JWT access token."""
-    try:
-        payload = jwt.decode(
-            token,
-            SECRET_KEY,
-            algorithms=[ALGORITHM],
-        )
-        return payload
-    except PyJWTError:
-        return None
+    return jwt.decode(
+        token,
+        SECRET_KEY,
+        algorithms=[ALGORITHM],
+    )
