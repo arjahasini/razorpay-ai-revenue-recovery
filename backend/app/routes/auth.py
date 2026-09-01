@@ -15,8 +15,13 @@ from app.services.auth_service import (
 )
 
 router = APIRouter()
+
 security = HTTPBearer(auto_error=False)
 
+
+# -------------------------
+# Request / Response Models
+# -------------------------
 
 class LoginRequest(BaseModel):
     email: str
@@ -34,6 +39,10 @@ class AuthResponse(BaseModel):
     user: dict
 
 
+# -------------------------
+# Current User
+# -------------------------
+
 def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: Session = Depends(get_db),
@@ -45,13 +54,7 @@ def get_current_user(
             detail="Not authenticated",
         )
 
-    try:
-        payload = decode_access_token(credentials.credentials)
-    except Exception:
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid or expired token",
-        )
+    payload = decode_access_token(credentials.credentials)
 
     if not payload or "sub" not in payload:
         raise HTTPException(
@@ -67,11 +70,9 @@ def get_current_user(
             detail="Invalid token",
         )
 
-    user = (
-        db.query(User)
-        .filter(User.id == user_id)
-        .first()
-    )
+    user = db.query(User).filter(
+        User.id == user_id
+    ).first()
 
     if not user:
         raise HTTPException(
@@ -82,6 +83,10 @@ def get_current_user(
     return user
 
 
+# -------------------------
+# LOGIN
+# -------------------------
+
 @router.post("/api/auth/login", response_model=AuthResponse)
 def login(
     body: LoginRequest,
@@ -89,11 +94,9 @@ def login(
 ):
     email = body.email.strip().lower()
 
-    user = (
-        db.query(User)
-        .filter(User.email == email)
-        .first()
-    )
+    user = db.query(User).filter(
+        User.email == email
+    ).first()
 
     if not user:
         raise HTTPException(
@@ -101,26 +104,19 @@ def login(
             detail="Invalid email or password",
         )
 
-    try:
-        password_ok = verify_password(
-            body.password,
-            user.hashed_password,
-        )
-    except Exception:
-        password_ok = False
-
-    if not password_ok:
+    if not verify_password(
+        body.password,
+        user.hashed_password,
+    ):
         raise HTTPException(
             status_code=401,
             detail="Invalid email or password",
         )
 
-    token = create_access_token(
-        {
-            "sub": str(user.id),
-            "email": user.email,
-        }
-    )
+    token = create_access_token({
+        "sub": str(user.id),
+        "email": user.email,
+    })
 
     return {
         "token": token,
@@ -132,6 +128,10 @@ def login(
     }
 
 
+# -------------------------
+# SIGNUP
+# -------------------------
+
 @router.post("/api/auth/signup", response_model=AuthResponse)
 def signup(
     body: SignupRequest,
@@ -139,11 +139,9 @@ def signup(
 ):
     email = body.email.strip().lower()
 
-    existing = (
-        db.query(User)
-        .filter(User.email == email)
-        .first()
-    )
+    existing = db.query(User).filter(
+        User.email == email
+    ).first()
 
     if existing:
         raise HTTPException(
@@ -161,12 +159,10 @@ def signup(
     db.commit()
     db.refresh(user)
 
-    token = create_access_token(
-        {
-            "sub": str(user.id),
-            "email": user.email,
-        }
-    )
+    token = create_access_token({
+        "sub": str(user.id),
+        "email": user.email,
+    })
 
     return {
         "token": token,
@@ -177,6 +173,10 @@ def signup(
         },
     }
 
+
+# -------------------------
+# ME
+# -------------------------
 
 @router.get("/api/auth/me")
 def me(
