@@ -92,41 +92,53 @@ def login(
     body: LoginRequest,
     db: Session = Depends(get_db),
 ):
-    email = body.email.strip().lower()
+    try:
+        email = body.email.strip().lower()
 
-    user = db.query(User).filter(
-        User.email == email
-    ).first()
+        user = db.query(User).filter(
+            User.email == email
+        ).first()
 
-    if not user:
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid email or password",
+        if not user:
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid email or password",
+            )
+
+        valid = verify_password(
+            body.password,
+            user.hashed_password,
         )
 
-    if not verify_password(
-        body.password,
-        user.hashed_password,
-    ):
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid email or password",
-        )
+        if not valid:
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid email or password",
+            )
 
-    token = create_access_token({
-        "sub": str(user.id),
-        "email": user.email,
-    })
-
-    return {
-        "token": token,
-        "user": {
-            "id": user.id,
-            "name": user.name,
+        token = create_access_token({
+            "sub": str(user.id),
             "email": user.email,
-        },
-    }
+        })
 
+        return {
+            "token": token,
+            "user": {
+                "id": user.id,
+                "name": user.name,
+                "email": user.email,
+            },
+        }
+
+    except HTTPException:
+        raise
+
+    except Exception as e:
+        print("LOGIN ERROR:", repr(e))
+        raise HTTPException(
+            status_code=500,
+            detail=f"LOGIN ERROR: {type(e).__name__}: {str(e)}",
+        )
 
 # -------------------------
 # SIGNUP
