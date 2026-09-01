@@ -1,7 +1,7 @@
 """Authentication routes — login, signup, me."""
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
@@ -19,13 +19,13 @@ security = HTTPBearer(auto_error=False)
 
 
 class LoginRequest(BaseModel):
-    email: EmailStr
+    email: str
     password: str
 
 
 class SignupRequest(BaseModel):
     name: str
-    email: EmailStr
+    email: str
     password: str
 
 
@@ -39,7 +39,10 @@ def get_current_user(
     db: Session = Depends(get_db),
 ) -> User:
     if not credentials:
-        raise HTTPException(status_code=401, detail="Not authenticated")
+        raise HTTPException(
+            status_code=401,
+            detail="Not authenticated",
+        )
 
     payload = decode_access_token(credentials.credentials)
 
@@ -49,8 +52,16 @@ def get_current_user(
             detail="Invalid or expired token",
         )
 
+    try:
+        user_id = int(payload["sub"])
+    except (ValueError, TypeError):
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid token",
+        )
+
     user = db.query(User).filter(
-        User.id == int(payload["sub"])
+        User.id == user_id
     ).first()
 
     if not user:
