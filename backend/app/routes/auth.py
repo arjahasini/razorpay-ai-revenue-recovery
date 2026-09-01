@@ -73,7 +73,7 @@ def get_current_user(
     return user
 
 
-@router.post("/auth/login", response_model=AuthResponse)
+@router.post("/api/auth/login", response_model=AuthResponse)
 def login(
     body: LoginRequest,
     db: Session = Depends(get_db),
@@ -106,7 +106,7 @@ def login(
     }
 
 
-@router.post("/auth/signup", response_model=AuthResponse)
+@router.post("/api/auth/signup", response_model=AuthResponse)
 def signup(
     body: SignupRequest,
     db: Session = Depends(get_db),
@@ -146,7 +146,7 @@ def signup(
     }
 
 
-@router.get("/auth/me")
+@router.get("/api/auth/me")
 def me(
     user: User = Depends(get_current_user),
 ):
