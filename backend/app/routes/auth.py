@@ -38,13 +38,20 @@ def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: Session = Depends(get_db),
 ) -> User:
+
     if not credentials:
         raise HTTPException(
             status_code=401,
             detail="Not authenticated",
         )
 
-    payload = decode_access_token(credentials.credentials)
+    try:
+        payload = decode_access_token(credentials.credentials)
+    except Exception:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or expired token",
+        )
 
     if not payload or "sub" not in payload:
         raise HTTPException(
@@ -60,9 +67,11 @@ def get_current_user(
             detail="Invalid token",
         )
 
-    user = db.query(User).filter(
-        User.id == user_id
-    ).first()
+    user = (
+        db.query(User)
+        .filter(User.id == user_id)
+        .first()
+    )
 
     if not user:
         raise HTTPException(
@@ -78,23 +87,40 @@ def login(
     body: LoginRequest,
     db: Session = Depends(get_db),
 ):
-    user = db.query(User).filter(
-        User.email == body.email
-    ).first()
+    email = body.email.strip().lower()
 
-    if not user or not verify_password(
-        body.password,
-        user.hashed_password,
-    ):
+    user = (
+        db.query(User)
+        .filter(User.email == email)
+        .first()
+    )
+
+    if not user:
         raise HTTPException(
             status_code=401,
             detail="Invalid email or password",
         )
 
-    token = create_access_token({
-        "sub": str(user.id),
-        "email": user.email,
-    })
+    try:
+        password_ok = verify_password(
+            body.password,
+            user.hashed_password,
+        )
+    except Exception:
+        password_ok = False
+
+    if not password_ok:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid email or password",
+        )
+
+    token = create_access_token(
+        {
+            "sub": str(user.id),
+            "email": user.email,
+        }
+    )
 
     return {
         "token": token,
@@ -111,9 +137,13 @@ def signup(
     body: SignupRequest,
     db: Session = Depends(get_db),
 ):
-    existing = db.query(User).filter(
-        User.email == body.email
-    ).first()
+    email = body.email.strip().lower()
+
+    existing = (
+        db.query(User)
+        .filter(User.email == email)
+        .first()
+    )
 
     if existing:
         raise HTTPException(
@@ -122,8 +152,8 @@ def signup(
         )
 
     user = User(
-        name=body.name,
-        email=body.email,
+        name=body.name.strip(),
+        email=email,
         hashed_password=hash_password(body.password),
     )
 
@@ -131,10 +161,12 @@ def signup(
     db.commit()
     db.refresh(user)
 
-    token = create_access_token({
-        "sub": str(user.id),
-        "email": user.email,
-    })
+    token = create_access_token(
+        {
+            "sub": str(user.id),
+            "email": user.email,
+        }
+    )
 
     return {
         "token": token,
